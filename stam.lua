@@ -41,54 +41,45 @@ local function findCurrentStaminaBar()
 	end
 
 	local playerGui = player:WaitForChild("PlayerGui")
+	task.wait(1) -- give StarterGui time to replicate
 
-	-- give StarterGui a moment to replicate on spawn
-	task.wait(1)
-
-	local hotbarGui = playerGui:FindFirstChild("HotbarGui")
-	if not hotbarGui then
-		hotbarGui = playerGui:WaitForChild("HotbarGui", 5)
-	end
+	local hotbarGui = playerGui:FindFirstChild("HotbarGui") or playerGui:WaitForChild("HotbarGui", 5)
 	if not hotbarGui then return nil end
 
-	local playerStats = hotbarGui:FindFirstChild("PlayerStats")
-	if not playerStats then
-		playerStats = hotbarGui:WaitForChild("PlayerStats", 5)
-	end
+	local playerStats = hotbarGui:FindFirstChild("PlayerStats") or hotbarGui:WaitForChild("PlayerStats", 5)
 	if not playerStats then return nil end
 
-	local currentStaminaBar = playerStats:FindFirstChild("CurrentStaminaBar")
-	if not currentStaminaBar then
-		currentStaminaBar = playerStats:WaitForChild("CurrentStaminaBar", 5)
-	end
-
+	local currentStaminaBar = playerStats:FindFirstChild("CurrentStaminaBar") or playerStats:WaitForChild("CurrentStaminaBar", 5)
 	cachedBar = currentStaminaBar
 	return cachedBar
 end
 
--- Ensure the bar drains TOP -> DOWN (anchor the top once, then only resize height)
-local function anchorBarToTopOnce(bar)
-	if not bar or bar:GetAttribute("TopAnchored") then return end
-
+-- Ensure the bar drains TOP -> DOWN by anchoring its bottom once
+local function anchorBarToBottomOnce(bar)
+	if not bar or bar:GetAttribute("BottomAnchored") then return end
 	local parent = bar.Parent
 	if not parent then return end
 
-	-- Preserve current top edge in pixels relative to parent
-	local topY = bar.AbsolutePosition.Y - parent.AbsolutePosition.Y
+	-- Compute current bottom (as a scale) so we preserve on-screen placement
+	local parentTop = parent.AbsolutePosition.Y
+	local barTop = bar.AbsolutePosition.Y
+	local barBottomAbs = (barTop - parentTop) + bar.AbsoluteSize.Y
+	local parentH = math.max(parent.AbsoluteSize.Y, 1)
+	local bottomScale = barBottomAbs / parentH
 
-	-- Flip to top anchoring
-	bar.AnchorPoint = Vector2.new(bar.AnchorPoint.X, 0)
-	-- Lock Y to the preserved top edge; keep X the same
-	bar.Position = UDim2.new(bar.Position.X.Scale, bar.Position.X.Offset, 0, topY)
+	-- Flip to bottom anchoring and keep the same bottom position
+	bar.AnchorPoint = Vector2.new(bar.AnchorPoint.X, 1)
+	bar.Position = UDim2.new(bar.Position.X.Scale, bar.Position.X.Offset, bottomScale, 0)
 
-	bar:SetAttribute("TopAnchored", true)
+	bar:SetAttribute("BottomAnchored", true)
 end
 
 local function updateStaminaUI()
 	local bar = findCurrentStaminaBar()
 	if not bar then return end
 
-	anchorBarToTopOnce(bar)
+	-- Make sure the bar is bottom-anchored so it empties from the TOP downward
+	anchorBarToBottomOnce(bar)
 
 	local staminaPercentage = math.clamp(currentStamina / maxStamina, 0, 1)
 	bar.Size = UDim2.new(
